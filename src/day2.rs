@@ -1,3 +1,4 @@
+use std::cmp::max;
 use std::collections::HashMap;
 use nom::branch::alt;
 use nom::bytes::complete::{is_not, tag};
@@ -54,6 +55,19 @@ impl CubeSet {
         true
     }
 
+    fn merge_max(&self, cs: &CubeSet) -> CubeSet {
+        let r_cnt = max(self.cubes.get(&Red).unwrap_or(&0), cs.cubes.get(&Red).unwrap_or(&0));
+        let g_cnt = max(self.cubes.get(&Green).unwrap_or(&0), cs.cubes.get(&Green).unwrap_or(&0));
+        let b_cnt = max(self.cubes.get(&Blue).unwrap_or(&0), cs.cubes.get(&Blue).unwrap_or(&0));
+        CubeSet::make(*r_cnt, *g_cnt, *b_cnt)
+    }
+
+    fn power(&self) -> u32 {
+        self.cubes.get(&Red).unwrap_or(&0)
+            * self.cubes.get(&Green).unwrap_or(&0)
+            * self.cubes.get(&Blue).unwrap_or(&0)
+    }
+
     fn make(r: u32, g: u32, b: u32) -> CubeSet {
         let cubes: HashMap<CubeColor, u32> = [
             (Red, r),
@@ -106,14 +120,10 @@ fn game_parser(input: &str) -> IResult<&str, u32> {
 }
 
 fn process_line_day2(line: &str, check_set: &CubeSet) -> u32 {
-    let (out, game_num) = match game_parser(line) {
-        Ok(x) => x,
-        Err(_) => ("", 0)
-    };
+    let mut parser = tuple((game_parser, groups_parser));
+    let (out, (game_num, groups)) = parser(line).unwrap_or_default();
 
-    let groups = groups_parser(out).unwrap_or_default();
-
-    for grp_str in groups.1 {
+    for grp_str in groups {
         let set = cube_set_parser(grp_str).unwrap_or_default();
         if !check_set.possible(&set.1) {
             return 0
@@ -122,15 +132,28 @@ fn process_line_day2(line: &str, check_set: &CubeSet) -> u32 {
     return game_num
 }
 
+fn process_line_day2_part2(line: &str) -> CubeSet {
+    let mut parser = tuple((game_parser, groups_parser));
+    let (out, (game_num, groups)) = parser(line).unwrap_or_default();
+
+    let mut max_set = CubeSet::make(0,0,0);
+    for grp_str in groups {
+        let (_, set) = cube_set_parser(grp_str).unwrap_or_default();
+        max_set = max_set.merge_max(&set);
+    }
+    return max_set
+}
+
 pub fn do_day2() {
-    let check_set = CubeSet::make(12, 13, 14);
     if let Ok(lines) = common::read_lines("./data/day2input.txt") {
-        // Consumes the iterator, returns an (Optional) String
         let mut sum = 0;
         for line in lines {
             if let Ok(token) = line {
-                let ret = process_line_day2(&token, &check_set);
-                sum += ret
+                let ret = process_line_day2_part2(&token);
+                if ret.power() == 0 {
+                    println!()
+                }
+                sum += ret.power()
             }
         }
         println!("final sum: {}", sum);
@@ -142,7 +165,8 @@ pub fn do_day2() {
 mod tests {
     use nom::bytes::complete::take_until;
     use nom::error::Error;
-    use crate::day2::{cube_parser, cube_set_parser, CubeColor, CubeSet, game_parser, group_parser, groups_parser, process_line_day2};
+    use nom::sequence::tuple;
+    use crate::day2::{cube_parser, cube_set_parser, CubeColor, CubeSet, game_parser, group_parser, groups_parser, process_line_day2, process_line_day2_part2};
 
     #[test]
     fn test_games_possible() {
@@ -171,6 +195,18 @@ mod tests {
     }
 
     #[test]
+    fn test_line_parsing() {
+        let input = "Game 1: 12 red, 2 green, 5 blue; 9 red, 6 green, 4 blue; 10 red, 2 green, 5 blue; 8 blue, 9 red";
+
+        let mut parser = tuple((game_parser, groups_parser));
+
+        let (out, (game_id, groups)) = parser(input).unwrap_or_default();
+        assert_eq!("", out);
+        assert_eq!(1, game_id);
+        assert_eq!(4, groups.len());
+    }
+
+    #[test]
     fn test_day2() {
         let input = "Game 1: 12 red, 2 green, 5 blue; 9 red, 6 green, 4 blue; 10 red, 2 green, 5 blue; 8 blue, 9 red";
 
@@ -181,6 +217,35 @@ mod tests {
         let check_set2 = CubeSet::make(12, 12, 12);
         let game1 = process_line_day2(input, &check_set2);
         assert_eq!(1, game1);
+
+    }
+
+    #[test]
+    fn test_day2_part2() {
+        let input = "Game 1: 12 red, 2 green, 5 blue; 9 red, 6 green, 4 blue; 10 red, 2 green, 5 blue; 8 blue, 9 red";
+        let check_set = process_line_day2_part2(input);
+        assert_eq!(576, check_set.power());
+    }
+
+    #[test]
+    fn test_merge_max() {
+
+        let c1 = CubeSet::make(10, 10, 10);
+        let c2 = CubeSet::make(5, 15, 5);
+
+        let c_max = c1.merge_max(&c2);
+
+        assert_eq!(10, c_max.cubes[&CubeColor::Red]);
+        assert_eq!(15, c_max.cubes[&CubeColor::Green]);
+        assert_eq!(10, c_max.cubes[&CubeColor::Blue]);
+
+        let c3 = CubeSet::make(10, 0, 0);
+
+        let c_max2 = c3.merge_max(&c2) ;
+
+        assert_eq!(10, c_max2.cubes[&CubeColor::Red]);
+        assert_eq!(15, c_max2.cubes[&CubeColor::Green]);
+        assert_eq!(5, c_max2.cubes[&CubeColor::Blue]);
 
     }
 }
