@@ -1,0 +1,3 @@
+# adventofcode2023
+
+More like Advent of Nom so far...
