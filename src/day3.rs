@@ -1,5 +1,6 @@
 use std::cmp::{max, min};
 use std::collections::HashSet;
+use crate::common;
 
 #[derive(Clone)]
 #[derive(Default)]
@@ -17,6 +18,15 @@ struct Section {
 }
 
 impl Section {
+
+    fn new() -> Section {
+        Section{
+            width: 0,
+            preceding: LineProc::default(),
+            current: LineProc::default(),
+            next: LineProc::default(),
+        }
+    }
 
     fn process_line(&self, line: &str) -> LineProc {
         let mut nums: Vec<u32> = Vec::new();
@@ -47,6 +57,10 @@ impl Section {
             if is_symbol(c) {
                 symbol_positions.push(pos);
             }
+        }
+        if got_num {
+            let idx = nums.len() - 1;
+            num_ranges[idx].1 = line.len() - 1;
         }
 
         LineProc{
@@ -90,11 +104,58 @@ fn is_symbol(c: char) -> bool {
     true
 }
 
+pub fn do_day3() {
+    if let Ok(lines) = common::read_lines("./data/day3input.txt") {
+        let mut total = 0;
+        let mut sec = Section::new();
+        for line in lines {
+            if let Ok(token) = line {
+                sec = sec.push(token.as_str());
+                let ret = sec.find_adjacent_nums();
+                let sum = ret.iter().fold(0, |acc, num| acc + num);
+                total += sum;
+            }
+        }
+        sec = sec.push("");
+        let ret = sec.find_adjacent_nums();
+        let sum = ret.iter().fold(0, |acc, num| acc + num);
+        total += sum;
+        println!("final sum: {}", total);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use nom::sequence::preceded;
     use crate::day3::{is_symbol, LineProc, Section};
 
+    #[test]
+    fn test_edge() {
+        let test = vec![
+            "....758..........................*......=.............@................................273......911...#....@666...+193......................",
+            ".............604....483..&144.859......807...-.........995..-218.770............37.512.*.........*.........................215...........117",
+            "......354..........*...............$........849.*.................................*.....242....469.&764.........................959*128.$..."];
+
+        // TODO: all dup'd
+        let mut sec = Section::new();
+
+        let mut total = 0;
+        for l in test {
+            sec = sec.push(l);
+            let ret = sec.find_adjacent_nums();
+            let sum = ret.iter().fold(0, |acc, num| acc + num);
+            total += sum;
+            println!("{:?}", ret)
+        }
+        sec = sec.push("");
+        let ret = sec.find_adjacent_nums();
+        let sum = ret.iter().fold(0, |acc, num| acc + num);
+        total += sum;
+        println!("{:?}", ret);
+
+        assert_eq!(9626, total);
+
+    }
     #[test]
     fn test_example() {
         let ex = vec![
@@ -109,12 +170,7 @@ mod tests {
             "...$.*....",
             ".664.598.."];
 
-        let mut sec = Section{
-            width: 0,
-            preceding: LineProc::default(),
-            current: LineProc::default(),
-            next: LineProc::default(),
-        };
+        let mut sec = Section::new();
 
         let mut total = 0;
         for l in ex {

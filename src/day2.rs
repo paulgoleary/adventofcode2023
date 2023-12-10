@@ -160,7 +160,6 @@ pub fn do_day2() {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use nom::bytes::complete::take_until;

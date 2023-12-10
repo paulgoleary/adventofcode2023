@@ -4,10 +4,10 @@ mod day3;
 
 mod common;
 
-use crate::day2::do_day2;
+use crate::day3::do_day3;
 
 fn main() {
-    do_day2()
+    do_day3()
 }
 
 
