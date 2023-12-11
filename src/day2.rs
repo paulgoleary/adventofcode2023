@@ -18,12 +18,7 @@ fn group_parser(s: &str) -> IResult<&str, Vec<&str>> {
     separated_list0(tag(","), is_not(","))(s)
 }
 
-#[derive(Clone)]
-#[derive(Default)]
-#[derive(PartialEq)]
-#[derive(Debug)]
-#[derive(Eq)]
-#[derive(Hash)]
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
 enum CubeColor {
     #[default]
     None,
@@ -32,8 +27,7 @@ enum CubeColor {
     Blue
 }
 
-#[derive(Default)]
-#[derive(PartialEq)]
+#[derive(Default, PartialEq)]
 struct Cube {
     cnt: u32,
     color: CubeColor,

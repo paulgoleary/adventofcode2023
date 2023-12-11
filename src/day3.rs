@@ -2,11 +2,9 @@ use std::cmp::{max, min};
 use std::collections::HashSet;
 use crate::common;
 
-#[derive(Clone)]
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct LineProc {
-    nums: Vec<u32>,
-    num_ranges: Vec<(usize, usize)>,
+    nums: Vec<(u32, usize, usize)>,
     symbol_positions: HashSet<usize>
 }
 
@@ -19,7 +17,7 @@ struct Section {
 
 impl Section {
 
-    fn new() -> Section {
+    fn new() -> Self {
         Section{
             width: 0,
             preceding: LineProc::default(),
@@ -29,8 +27,7 @@ impl Section {
     }
 
     fn process_line(&self, line: &str) -> LineProc {
-        let mut nums: Vec<u32> = Vec::new();
-        let mut num_ranges: Vec<(usize, usize)> = Vec::new();
+        let mut nums: Vec<(u32, usize, usize)> = Vec::new();
         let mut got_num = false;
 
         let mut symbol_positions: Vec<usize> = Vec::new();
@@ -40,17 +37,16 @@ impl Section {
                 let num: u32 = c.to_string().parse().unwrap();
                 if got_num {
                     let idx = nums.len() - 1;
-                    nums[idx] *= 10;
-                    nums[idx] += num;
+                    nums[idx].0 *= 10;
+                    nums[idx].0 += num;
                 } else {
                     got_num = true;
-                    nums.push(num);
-                    num_ranges.push((pos, 0));
+                    nums.push((num, pos, 0));
                 }
             } else {
                 if got_num {
                     let idx = nums.len() - 1;
-                    num_ranges[idx].1 = pos - 1;
+                    nums[idx].2 = pos - 1;
                     got_num = false;
                 }
             }
@@ -60,17 +56,16 @@ impl Section {
         }
         if got_num {
             let idx = nums.len() - 1;
-            num_ranges[idx].1 = line.len() - 1;
+            nums[idx].2 = line.len() - 1;
         }
 
         LineProc{
             nums,
-            num_ranges,
             symbol_positions: symbol_positions.iter().map(|x| *x).collect(),
         }
     }
 
-    fn push(&self, line: &str) -> Section {
+    fn push(&self, line: &str) -> Self {
         Section{
             width: max(self.width, line.len()), // TODO: validate constant?
             preceding: self.current.clone(),
@@ -80,10 +75,9 @@ impl Section {
     }
 
     fn find_adjacent_nums(&self) -> Vec<u32> {
-        let zip = self.current.nums.iter().zip(self.current.num_ranges.iter());
-        let ret = zip.enumerate().filter(|(idx, (num, (range_lo, range_hi)))|{
-            let rl = if range_lo > &0 { range_lo - 1 } else { *range_lo };
-            let rh = if range_hi < &(self.width - 1) { range_hi + 1 } else { *range_hi };
+        let ret = self.current.nums.iter().enumerate().filter(|(idx, (num, range_lo, range_hi))|{
+            let rl = if *range_lo > 0 { range_lo - 1 } else { *range_lo };
+            let rh = if *range_hi < (self.width - 1) { range_hi + 1 } else { *range_hi };
             for rx in rl..=rh {
                 for sp in [&self.preceding.symbol_positions, &self.current.symbol_positions, &self.next.symbol_positions] {
                     if sp.contains(&rx) {
@@ -93,7 +87,7 @@ impl Section {
             }
             false
         });
-        ret.map(|xx|*xx.1.0).collect()
+        ret.map(|(_, (num, _, _))| *num ).collect()
     }
 }
 
@@ -106,28 +100,32 @@ fn is_symbol(c: char) -> bool {
 
 pub fn do_day3() {
     if let Ok(lines) = common::read_lines("./data/day3input.txt") {
-        let mut total = 0;
-        let mut sec = Section::new();
-        for line in lines {
-            if let Ok(token) = line {
-                sec = sec.push(token.as_str());
-                let ret = sec.find_adjacent_nums();
-                let sum = ret.iter().fold(0, |acc, num| acc + num);
-                total += sum;
-            }
-        }
-        sec = sec.push("");
+        let lines_iter = lines.map(|l| l.unwrap()).into_iter();
+        let total = process_lines_day3(lines_iter);
+        println!("final sum: {}", total);
+    }
+}
+
+fn process_lines_day3(lines : impl std::iter::Iterator<Item = String>) -> u32 {
+    let mut total = 0;
+    let mut sec = Section::new();
+    for line in lines {
+        sec = sec.push(line.as_str());
         let ret = sec.find_adjacent_nums();
         let sum = ret.iter().fold(0, |acc, num| acc + num);
         total += sum;
-        println!("final sum: {}", total);
     }
+    sec = sec.push("");
+    let ret = sec.find_adjacent_nums();
+    let sum = ret.iter().fold(0, |acc, num| acc + num);
+    total += sum;
+    total
 }
 
 #[cfg(test)]
 mod tests {
     use nom::sequence::preceded;
-    use crate::day3::{is_symbol, LineProc, Section};
+    use crate::day3::{is_symbol, LineProc, process_lines_day3, Section};
 
     #[test]
     fn test_edge() {
@@ -136,26 +134,12 @@ mod tests {
             ".............604....483..&144.859......807...-.........995..-218.770............37.512.*.........*.........................215...........117",
             "......354..........*...............$........849.*.................................*.....242....469.&764.........................959*128.$..."];
 
-        // TODO: all dup'd
-        let mut sec = Section::new();
-
-        let mut total = 0;
-        for l in test {
-            sec = sec.push(l);
-            let ret = sec.find_adjacent_nums();
-            let sum = ret.iter().fold(0, |acc, num| acc + num);
-            total += sum;
-            println!("{:?}", ret)
-        }
-        sec = sec.push("");
-        let ret = sec.find_adjacent_nums();
-        let sum = ret.iter().fold(0, |acc, num| acc + num);
-        total += sum;
-        println!("{:?}", ret);
+        let test_iter = test.iter().map(|s| s.to_string()).into_iter();
+        let total = process_lines_day3(test_iter);
 
         assert_eq!(9626, total);
-
     }
+
     #[test]
     fn test_example() {
         let ex = vec![
@@ -170,22 +154,8 @@ mod tests {
             "...$.*....",
             ".664.598.."];
 
-        let mut sec = Section::new();
-
-        let mut total = 0;
-        for l in ex {
-            sec = sec.push(l);
-            let ret = sec.find_adjacent_nums();
-            let sum = ret.iter().fold(0, |acc, num| acc + num);
-            total += sum;
-            println!("{:?}", ret)
-        }
-        sec = sec.push("");
-        let ret = sec.find_adjacent_nums();
-        let sum = ret.iter().fold(0, |acc, num| acc + num);
-        total += sum;
-        println!("{:?}", ret);
-
+        let ex_iter = ex.iter().map(|s| s.to_string()).into_iter();
+        let total = process_lines_day3(ex_iter);
         assert_eq!(4361, total);
     }
 
