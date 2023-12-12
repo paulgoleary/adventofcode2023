@@ -27,7 +27,7 @@ fn is_symbol(c: char) -> bool {
     true
 }
 
-fn is_gear(c: char) -> bool {
+fn is_star(c: char) -> bool {
     if c == '*' {
         return true
     }
@@ -89,7 +89,7 @@ impl Section {
             nums[idx].2 = line.len() - 1;
         }
 
-        nums.sort();
+        nums.sort_by(|a, b| a.1.cmp(&b.1)); // we sort the nums by their position tuple
         LineProc{
             nums,
             symbol_positions: symbol_positions.iter().map(|x| *x).collect(),
@@ -121,6 +121,13 @@ impl Section {
         });
         ret.map(|(_, (num, _, _))| *num ).collect()
     }
+
+    fn find_gears(&self) -> Vec<(u32, u32)> {
+        for (idx, pos) in self.current.symbol_positions.iter().enumerate() {
+
+        }
+        Vec::new()
+    }
 }
 
 pub fn do_day3() {
@@ -147,8 +154,25 @@ fn process_lines_day3(lines : impl std::iter::Iterator<Item = String>) -> u32 {
     total
 }
 
+fn process_lines_day3_part2(lines : impl std::iter::Iterator<Item = String>) -> u32 {
+    let mut total = 0;
+    let mut sec = Section::new(is_star);
+    for line in lines {
+        sec = sec.push(line.as_str());
+        let ret = sec.find_gears();
+        let sum = ret.iter().fold(0, |acc, nums| acc + nums.0 * nums.1);
+        total += sum;
+    }
+    sec = sec.push("");
+    let ret = sec.find_gears();
+    let sum = ret.iter().fold(0, |acc, nums| acc + nums.0 * nums.1);
+    total += sum;
+    total
+}
+
 #[cfg(test)]
 mod tests {
+    use std::cmp::Ordering;
     use crate::day3::{is_symbol, LineProc, process_lines_day3, Section};
 
     #[test]
@@ -224,6 +248,31 @@ mod tests {
 
         sec = sec.push("");
         assert_eq!(0, sec.next.nums.len());
+    }
 
+    #[test]
+    fn test_tuple_searching() {
+        let mut nums: Vec<(u32, usize, usize)> = Vec::new();
+        nums.push((2, 5, 7));
+        nums.push((1, 1, 3));
+        nums.push((3, 9, 9));
+
+        nums.sort_by(|a, b| a.1.cmp(&b.1));
+        assert_eq!(1, nums.get(0).unwrap().0);
+
+        let tests = vec![(9, 2), (6, 1)];
+
+        for (seek, expect) in tests {
+            let s = nums.binary_search_by(|probe| {
+                if seek >= probe.1 && seek <= probe.2 {
+                    Ordering::Equal
+                } else if probe.1 < seek {
+                    Ordering::Less
+                } else {
+                    Ordering::Greater
+                }
+            });
+            assert_eq!(expect, s.unwrap());
+        }
     }
 }
