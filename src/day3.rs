@@ -8,17 +8,46 @@ struct LineProc {
     symbol_positions: HashSet<usize>
 }
 
+pub trait SelectSymbol {
+    fn select(&self, c: char) -> bool;
+}
+
 struct Section {
+    select_func: fn(c: char) -> bool,
     width: usize,
     preceding: LineProc,
     current: LineProc,
     next: LineProc
 }
 
+fn is_symbol(c: char) -> bool {
+    if c.is_digit(10) || c == '.' {
+        return false
+    }
+    true
+}
+
+fn is_gear(c: char) -> bool {
+    if c == '*' {
+        return true
+    }
+    false
+}
+
+impl SelectSymbol for Section {
+    fn select(&self, c: char) -> bool {
+        if c.is_digit(10) || c == '.' {
+            return false
+        }
+        true
+    }
+}
+
 impl Section {
 
-    fn new() -> Self {
+    fn new(sf: fn(c: char) -> bool) -> Self {
         Section{
+            select_func: sf,
             width: 0,
             preceding: LineProc::default(),
             current: LineProc::default(),
@@ -50,7 +79,8 @@ impl Section {
                     got_num = false;
                 }
             }
-            if is_symbol(c) {
+            // if self.select(c) {
+            if (self.select_func)(c) {
                 symbol_positions.push(pos);
             }
         }
@@ -59,6 +89,7 @@ impl Section {
             nums[idx].2 = line.len() - 1;
         }
 
+        nums.sort();
         LineProc{
             nums,
             symbol_positions: symbol_positions.iter().map(|x| *x).collect(),
@@ -67,6 +98,7 @@ impl Section {
 
     fn push(&self, line: &str) -> Self {
         Section{
+            select_func: self.select_func,
             width: max(self.width, line.len()), // TODO: validate constant?
             preceding: self.current.clone(),
             current: self.next.clone(),
@@ -91,13 +123,6 @@ impl Section {
     }
 }
 
-fn is_symbol(c: char) -> bool {
-    if c.is_digit(10) || c == '.' {
-        return false
-    }
-    true
-}
-
 pub fn do_day3() {
     if let Ok(lines) = common::read_lines("./data/day3input.txt") {
         let lines_iter = lines.map(|l| l.unwrap()).into_iter();
@@ -108,7 +133,7 @@ pub fn do_day3() {
 
 fn process_lines_day3(lines : impl std::iter::Iterator<Item = String>) -> u32 {
     let mut total = 0;
-    let mut sec = Section::new();
+    let mut sec = Section::new(is_symbol);
     for line in lines {
         sec = sec.push(line.as_str());
         let ret = sec.find_adjacent_nums();
@@ -124,7 +149,6 @@ fn process_lines_day3(lines : impl std::iter::Iterator<Item = String>) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use nom::sequence::preceded;
     use crate::day3::{is_symbol, LineProc, process_lines_day3, Section};
 
     #[test]
@@ -167,6 +191,7 @@ mod tests {
         let line4 = "..856.495....13...-...............602..........36...$.985....341*.........88.....*.921....................122..................806..508.....";
 
         let mut sec = Section{
+            select_func: is_symbol,
             width: 0,
             preceding: LineProc::default(),
             current: LineProc::default(),

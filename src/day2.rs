@@ -159,8 +159,12 @@ mod tests {
     use nom::bytes::complete::take_until;
     use nom::error::Error;
     use nom::sequence::tuple;
-    use crate::day2::{cube_parser, cube_set_parser, CubeColor, CubeSet, game_parser, group_parser, groups_parser, process_line_day2, process_line_day2_part2};
+    use crate::day2::{cube_parser, cube_set_parser, CubeColor, CubeSet, do_day2, game_parser, group_parser, groups_parser, process_line_day2, process_line_day2_part2};
 
+    #[test]
+    fn test_do_day2() {
+        do_day2()
+    }
     #[test]
     fn test_games_possible() {
         let bag = CubeSet::make(12, 13, 14);
