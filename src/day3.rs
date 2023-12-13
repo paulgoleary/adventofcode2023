@@ -1,4 +1,4 @@
-use std::cmp::{max, min};
+use std::cmp::{max, min, Ordering};
 use std::collections::HashSet;
 use crate::common;
 
@@ -122,18 +122,45 @@ impl Section {
         ret.map(|(_, (num, _, _))| *num ).collect()
     }
 
-    fn find_gears(&self) -> Vec<(u32, u32)> {
-        for (idx, pos) in self.current.symbol_positions.iter().enumerate() {
+    fn star_search_range(&self, pos: usize) -> (usize, usize) {
+        (if pos == 0 {0} else {pos-1},
+          if pos == self.width-1 {self.width-1} else {pos+1})
+    }
 
+    fn find_gears(&self) -> Vec<(u32, u32)> {
+        let mut found_gears: Vec<(u32, u32)> = Vec::new();
+        for pos in self.current.symbol_positions.iter() {
+            let mut star_nums: HashSet<u32> = HashSet::new();
+            let (start_pos, end_pos) = self.star_search_range(*pos);
+            for seek in start_pos..=end_pos {
+                for nums in [&self.preceding.nums, &self.current.nums, &self.next.nums] {
+                    match nums.binary_search_by(|probe| {
+                        if seek >= probe.1 && seek <= probe.2 {
+                            Ordering::Equal
+                        } else if probe.1 < seek {
+                            Ordering::Less
+                        } else {
+                            Ordering::Greater
+                        }
+                    }) {
+                        Ok(idx) => {star_nums.insert(nums[idx].0);},
+                        _ => {}
+                    }
+                }
+            }
+            if star_nums.len() == 2 {
+                let c: Vec<&u32> = star_nums.iter().collect();
+                found_gears.push((*c[0], *c[1]))
+            }
         }
-        Vec::new()
+        found_gears
     }
 }
 
 pub fn do_day3() {
     if let Ok(lines) = common::read_lines("./data/day3input.txt") {
         let lines_iter = lines.map(|l| l.unwrap()).into_iter();
-        let total = process_lines_day3(lines_iter);
+        let total = process_lines_day3_part2(lines_iter);
         println!("final sum: {}", total);
     }
 }
@@ -173,7 +200,7 @@ fn process_lines_day3_part2(lines : impl std::iter::Iterator<Item = String>) -> 
 #[cfg(test)]
 mod tests {
     use std::cmp::Ordering;
-    use crate::day3::{is_symbol, LineProc, process_lines_day3, Section};
+    use crate::day3::{is_symbol, LineProc, process_lines_day3, process_lines_day3_part2, Section};
 
     #[test]
     fn test_edge() {
@@ -205,6 +232,25 @@ mod tests {
         let ex_iter = ex.iter().map(|s| s.to_string()).into_iter();
         let total = process_lines_day3(ex_iter);
         assert_eq!(4361, total);
+    }
+
+    #[test]
+    fn test_example_part2() {
+        let ex = vec![
+            "467..114..",
+            "...*......",
+            "..35..633.",
+            "......#...",
+            "617*......",
+            ".....+.58.",
+            "..592.....",
+            "......755.",
+            "...$.*....",
+            ".664.598.."];
+
+        let ex_iter = ex.iter().map(|s| s.to_string()).into_iter();
+        let total = process_lines_day3_part2(ex_iter);
+        assert_eq!(467835, total);
     }
 
     #[test]
