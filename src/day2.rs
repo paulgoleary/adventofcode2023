@@ -2,7 +2,7 @@ use std::cmp::max;
 use std::collections::HashMap;
 use nom::branch::alt;
 use nom::bytes::complete::{is_not, tag};
-use nom::character::complete::{alphanumeric0, digit1, multispace0, space1};
+use nom::character::complete::space1;
 use nom::combinator::value;
 use nom::IResult;
 use nom::multi::separated_list0;
@@ -72,15 +72,6 @@ impl CubeSet {
     }
 }
 
-fn number(input: &str) -> IResult<&str, u32> {
-    digit1(input).map(|(remaining, number)| {
-        // it can panic if the string represents a number
-        // that does not fit into u32
-        let n = number.parse().unwrap();
-        (remaining, n)
-    })
-}
-
 fn color(input: &str) -> IResult<&str, CubeColor> {
     alt((
         value(CubeColor::Red, tag("red")),
@@ -90,7 +81,7 @@ fn color(input: &str) -> IResult<&str, CubeColor> {
 }
 
 fn cube_parser(input: &str) -> IResult<&str, Cube> {
-    tuple((space1, number, space1, color))(input).map(|(remaining, res)| {
+    tuple((space1, common::number, space1, color))(input).map(|(remaining, res)| {
         (remaining, Cube {cnt: res.1, color: res.3})
     })
 }
@@ -108,7 +99,7 @@ fn cube_set_parser(input: &str) -> IResult<&str, CubeSet> {
 }
 
 fn game_parser(input: &str) -> IResult<&str, u32> {
-    tuple((tag("Game"), space1, number, tag(":")))(input).map(|(remaining, res)| {
+    tuple((tag("Game"), space1, common::number, tag(":")))(input).map(|(remaining, res)| {
         (remaining, res.2)
     })
 }
@@ -156,10 +147,8 @@ pub fn do_day2() {
 
 #[cfg(test)]
 mod tests {
-    use nom::bytes::complete::take_until;
-    use nom::error::Error;
     use nom::sequence::tuple;
-    use crate::day2::{cube_parser, cube_set_parser, CubeColor, CubeSet, do_day2, game_parser, group_parser, groups_parser, process_line_day2, process_line_day2_part2};
+    use crate::day2::{cube_parser, CubeColor, CubeSet, do_day2, game_parser, groups_parser, process_line_day2, process_line_day2_part2};
 
     #[test]
     fn test_do_day2() {
