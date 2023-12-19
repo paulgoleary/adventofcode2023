@@ -24,10 +24,8 @@ fn process_line_day4(line: &str) -> usize {
         multispace1,
         separated_list1(multispace1, number))
     );
-    let (_, wining_nums, card_nums) = match parser(line) {
-        Ok(res) => (res.1.0, res.1.2, res.1.6),
-        Err(_) => (0, Vec::new(), Vec::new()),
-    };
+    let (_, wining_nums, card_nums) = parser(line)
+        .map(|res| (res.1.0, res.1.2, res.1.6)).unwrap_or_default();
     let winning_set: HashSet<_> = wining_nums.iter().collect();
     let card_set: HashSet<_> = card_nums.iter().collect();
     let sect: HashSet<_> = winning_set.intersection(&card_set).collect();
@@ -36,7 +34,6 @@ fn process_line_day4(line: &str) -> usize {
 
 pub fn do_day4() {
     if let Ok(lines) = common::read_lines("./data/day4input.txt") {
-
         let card_matches: Vec<usize> = lines.map(|l| process_line_day4(&l.unwrap())).collect();
 
         let res_part1 = card_matches.iter().fold(0, |acc, x| acc + if *x == 0 {0} else {2u32.pow((x-1) as u32)});
