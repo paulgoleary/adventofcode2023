@@ -18,11 +18,11 @@ fn process_line_day4(line: &str) -> usize {
     let mut parser = tuple((
         card_pre_parser,
         multispace1,
-        separated_list1(multispace1, number),
+        separated_list1(multispace1, number::<u32>),
         multispace1,
         tag("|"),
         multispace1,
-        separated_list1(multispace1, number))
+        separated_list1(multispace1, number::<u32>))
     );
     let (_, wining_nums, card_nums) = parser(line)
         .map(|res| (res.1.0, res.1.2, res.1.6)).unwrap_or_default();
