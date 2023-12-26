@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use std::cmp::{min, Ordering};
 use std::error::Error;
 use nom::character::complete::multispace1;
 use nom::multi::separated_list1;
@@ -11,23 +11,7 @@ pub enum Day5Error {
     InputFormatError(&'static str)
 }
 
-
-// input is "dest source width"; returns (source, dest, width)
-// TODO: error handling?
-fn parse_map_line(line: String) -> (u64, u64, u64) {
-    let (_, p) = separated_list1(multispace1, number::<u64>)(line.as_str()).unwrap_or_default();
-    (p[1], p[0], p[2])
-}
-
-fn process_map_group(lines : impl std::iter::Iterator<Item = String>) -> Vec<(u64, u64, u64)> {
-    let mut ret: Vec<(u64, u64, u64)> = lines.take_while(|l| !l.is_empty()).map(|l| {
-        parse_map_line(l)
-    }).collect();
-    ret.sort_by(|a, b| a.0.cmp(&b.0));
-    ret
-}
-
-fn process_day5_input(lines : impl Iterator<Item = String>) -> Result<(Vec<u64>, Vec<Vec<(u64,u64,u64)>>), Day5Error> {
+fn process_day5_input(lines : impl Iterator<Item = String>) -> Result<(Vec<u64>, Vec<Vec<RangeMap>>), Day5Error> {
     let line_groups = lines.fold(vec![Vec::new()], |mut acc: Vec<Vec<String>>, line| {
         if line.is_empty() {
             let empty_vec: Vec<String> = Vec::new();
@@ -62,8 +46,8 @@ fn process_day5_input(lines : impl Iterator<Item = String>) -> Result<(Vec<u64>,
         }
     }
 
-    let maps: Vec<Vec<(u64,u64,u64)>> = line_groups[1..].iter().map(|mg| {
-        process_map_group(mg[1..].iter().map(|s| s.to_string()))
+    let maps: Vec<Vec<RangeMap>> = line_groups[1..].iter().map(|mg| {
+        RangeMap::from_map_group(mg[1..].iter().map(|s| s.to_string()))
     }).collect();
 
     Ok((res_seeds, maps))
@@ -74,12 +58,12 @@ fn map_day5_part1_input(lines : impl Iterator<Item = String>) -> Result<Vec<u64>
     Ok(ret)
 }
 
-fn find_by_source(m: &Vec<(u64, u64, u64)>, seek: u64) -> Option<usize> {
+fn find_by_source(m: &Vec<RangeMap>, seek: u64) -> Option<usize> {
     match m.binary_search_by(|probe| {
         // find within range defined by source and width
-        if seek >= probe.0 && seek < (probe.0+probe.2) {
+        if seek >= probe.src && seek < (probe.src+probe.width) {
             Ordering::Equal
-        } else if probe.0 < seek {
+        } else if probe.src < seek {
             Ordering::Less
         } else {
             Ordering::Greater
@@ -90,21 +74,141 @@ fn find_by_source(m: &Vec<(u64, u64, u64)>, seek: u64) -> Option<usize> {
     }
 }
 
-fn map_by_source(m: &Vec<(u64, u64, u64)>, seek: u64) -> u64 {
+fn map_by_source(m: &Vec<RangeMap>, seek: u64) -> u64 {
     match find_by_source(m, seek) {
         Some(idx) => {
-            seek - m[idx].0 + m[idx].1
+            seek - m[idx].src + m[idx].dest
         },
         None => seek
     }
 }
 
-fn map_with_groups(map_val: u64, maps: &Vec<Vec<(u64,u64,u64)>>) -> u64 {
+fn map_with_groups(map_val: u64, maps: &Vec<Vec<RangeMap>>) -> u64 {
     let mut ret = map_val;
     for m in maps {
         ret = map_by_source(&m, ret);
     }
     ret
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Range {
+    start: u64,
+    width: u64
+}
+
+impl Range {
+    fn new(start: u64, width: u64) -> Range {
+        Range{start, width}
+    }
+    fn begin(&self) -> u64 {
+        self.start
+    }
+    fn end(&self) -> u64 {
+        self.start + self.width
+    }
+
+    // return true if any part of self overlaps target
+    fn overlaps(&self, target: &Range) -> bool {
+        if self.begin() >= target.begin() && self.begin() < target.end() {
+            return true
+        } else if self.end() > target.begin() && self.end() <= target.end() {
+            return true
+        }
+        false
+    }
+
+    // return true if check spans target - ie. target is completely within check
+    fn spans(&self, target: &Range) -> bool {
+        target.begin() >= self.begin() && target.end() < self.end()
+    }
+
+    // find maps that apply (overlap or spanned) to this range
+    fn find_range_maps<'a>(&self, target: &'a Vec<RangeMap>) -> Vec<&'a RangeMap> {
+        let find: Vec<&RangeMap> = target.iter().filter(|target| {
+            self.overlaps(&target.src_range() ) || self.spans(&target.src_range())
+        }).collect();
+        find
+    }
+
+    // calculates map of range and returns 'unmapped' portion
+    fn map_range(&self, rm: &RangeMap) -> (Range, Range) {
+        if self.start >= rm.src {
+            let off = self.start - rm.src;
+            let map_width = min(rm.width - off, self.width);
+            (Range::new(rm.dest+off, map_width), Range::new(rm.src+rm.width,self.width-map_width))
+        } else if self.end() > rm.src {
+            let map_width = self.end() - rm.src;
+            (Range::new(rm.dest, map_width), Range::new(self.start,self.width-map_width))
+        } else {
+            (Range::new(0,0), Range::new(self.start,self.width))
+        }
+    }
+
+    fn map_ranges(start_range: &Range, maps: &Vec<RangeMap>) -> Vec<Range> {
+        let mut ret: Vec<Range> = Vec::new();
+        let mut current_range = *start_range;
+        for rm in maps {
+            if current_range.overlaps(&rm.src_range()) || current_range.spans(&rm.src_range()) {
+                let (res_mapped, res_unmapped) = current_range.map_range(rm);
+                if res_mapped.width != 0 {
+                    ret.push(res_mapped)
+                }
+                current_range = res_unmapped;
+            }
+        }
+        if current_range.width > 0 {
+            ret.push(current_range);
+        }
+        ret
+    }
+
+    fn map_multi_ranges(ranges: &Vec<Range>, maps: &Vec<RangeMap>) -> Vec<Range> {
+        ranges.iter().flat_map(|r| Range::map_ranges(r, maps)).collect()
+    }
+}
+
+impl From<(u64,u64)> for Range {
+    fn from(value: (u64, u64)) -> Self {
+        Range{start: value.0, width: value.1}
+    }
+}
+
+#[derive(PartialEq, Debug)]
+struct RangeMap {
+    src: u64,
+    dest: u64,
+    width: u64
+}
+
+impl RangeMap {
+    fn src_range(&self) -> Range {
+        Range{start: self.src, width: self.width}
+    }
+    fn dest_range(&self) -> Range {
+        Range{start: self.dest, width: self.width}
+    }
+
+    // ixnput is "dest source width"; returns (source, dest, width)
+// TODO: error handling?
+    fn from_map_line(line: String) -> RangeMap {
+        let (_, p) = separated_list1(multispace1, number::<u64>)(line.as_str()).unwrap_or_default();
+        (p[1], p[0], p[2]).into()
+    }
+
+    fn from_map_group(lines : impl Iterator<Item = String>) -> Vec<RangeMap> {
+        let mut ret: Vec<RangeMap> = lines.take_while(|l| !l.is_empty()).map(|l| {
+            RangeMap::from_map_line(l).into()
+        }).collect();
+        ret.sort_by(|a, b| a.src.cmp(&b.src));
+        ret
+    }
+}
+
+impl From<(u64,u64,u64)> for RangeMap {
+    fn from(value: (u64,u64,u64)) -> Self {
+        RangeMap{src: value.0, dest: value.1, width: value.2}
+    }
 }
 
 #[cfg(test)]
@@ -114,7 +218,7 @@ mod tests {
     use nom::multi::separated_list1;
     use crate::common;
     use crate::common::number;
-    use crate::day5::{find_by_source, map_by_source, map_day5_part1_input, process_day5_input, process_map_group};
+    use crate::day5::{find_by_source, map_by_source, map_day5_part1_input, process_day5_input, Range, RangeMap};
 
     #[test]
     fn test_tuple_searching() {
@@ -142,8 +246,8 @@ mod tests {
             ""
         ];
 
-        let map_seed_2_soil = process_map_group(test_seed_2_soil.iter().map(|s| s.to_string()));
-        assert_eq!(50, map_seed_2_soil[0].0);
+        let map_seed_2_soil = RangeMap::from_map_group(test_seed_2_soil.iter().map(|s| s.to_string()));
+        assert_eq!(50, map_seed_2_soil[0].src);
 
         let test_soil_2_fertilizer: Vec<&str> = vec![
             "0 15 37",
@@ -152,8 +256,8 @@ mod tests {
             ""
         ];
 
-        let map_soil_2_fertilizer = process_map_group(test_soil_2_fertilizer.iter().map(|s| s.to_string()));
-        assert_eq!(0, map_soil_2_fertilizer[0].0);
+        let map_soil_2_fertilizer = RangeMap::from_map_group(test_soil_2_fertilizer.iter().map(|s| s.to_string()));
+        assert_eq!(0, map_soil_2_fertilizer[0].src);
 
         let res = find_by_source(&map_soil_2_fertilizer, 16);
         assert_eq!(1, res.unwrap(), "should find the second map - (15, 0, 37)");
@@ -204,126 +308,53 @@ mod tests {
 
     #[test]
     fn test_part2_example() {
-        if let Ok(lines) = common::read_lines("./data/day5example.txt") {
-            let lines_iter = lines.map(|l| l.unwrap()).into_iter();
-            let (res_seeds, res_maps) = process_day5_input(lines_iter).unwrap();
+        let tests = vec![("./data/day5example.txt", 46)];
+        for tt in tests {
+            if let Ok(lines) = common::read_lines(tt.0) {
+                let lines_iter = lines.map(|l| l.unwrap()).into_iter();
+                let (res_seeds, res_maps) = process_day5_input(lines_iter).unwrap();
 
-            // brute force the ranges ...
-            let mut lowest = u64::MAX;
-            for seed_range in res_seeds.chunks(2) {
-                for x in seed_range[0]..seed_range[0]+seed_range[1] {
-                    let mut ret = x;
-                    for m in &res_maps {
-                        ret = map_by_source(&m, ret);
-                    }
-                    if ret < lowest {
-                        lowest = ret
+                // brute force the ranges ...
+                let mut lowest = u64::MAX;
+                for seed_range in res_seeds.chunks(2) {
+                    for x in seed_range[0]..seed_range[0]+seed_range[1] {
+                        let mut ret = x;
+                        for m in &res_maps {
+                            ret = map_by_source(&m, ret);
+                        }
+                        if ret < lowest {
+                            lowest = ret
+                        }
                     }
                 }
-            }
 
-            assert_eq!(lowest, 46);
+                assert_eq!(lowest, tt.1);
+            }
         }
     }
 
-    #[derive(Clone, Copy, Debug, PartialEq)]
-    struct Range {
-        start: u64,
-        width: u64
-    }
+    #[test]
+    fn test_part2_example_mapping() {
+        let tests = vec![("./data/day5example.txt", 46u64),("./data/day5input.txt", 219529182u64)];
+        for tt in tests {
+            if let Ok(lines) = common::read_lines(tt.0) {
+                let lines_iter = lines.map(|l| l.unwrap()).into_iter();
+                let (res_seeds, res_maps) = process_day5_input(lines_iter).unwrap();
 
-    impl Range {
-        fn new(start: u64, width: u64) -> Range {
-            Range{start, width}
-        }
-        fn begin(&self) -> u64 {
-            self.start
-        }
-        fn end(&self) -> u64 {
-            self.start + self.width
-        }
-
-        // return true if any part of self overlaps target
-        fn overlaps(&self, target: &Range) -> bool {
-            if self.begin() >= target.begin() && self.begin() < target.end() {
-                return true
-            } else if self.end() > target.begin() && self.end() <= target.end() {
-                return true
-            }
-            false
-        }
-
-        // return true if check spans target - ie. target is completely within check
-        fn spans(&self, target: &Range) -> bool {
-            target.begin() >= self.begin() && target.end() < self.end()
-        }
-
-        // find maps that apply (overlap or spanned) to this range
-        fn find_range_maps<'a>(&self, target: &'a Vec<RangeMap>) -> Vec<&'a RangeMap> {
-            let find: Vec<&RangeMap> = target.iter().filter(|target| {
-                self.overlaps(&target.src_range() ) || self.spans(&target.src_range())
-            }).collect();
-            find
-        }
-
-        // calculates map of range and returns 'unmapped' portion
-        fn map_range(&self, rm: &RangeMap) -> (Range, Range) {
-            if self.start >= rm.src {
-                let off = self.start - rm.src;
-                let map_width = min(rm.width - off, self.width);
-                (Range::new(rm.dest+off, map_width), Range::new(rm.src+rm.width,self.width-map_width))
-            } else if self.end() > rm.src {
-                let map_width = self.end() - rm.src;
-                (Range::new(rm.dest, map_width), Range::new(self.start,self.width-map_width))
-            } else {
-                (Range::new(0,0), Range::new(self.start,self.width))
-            }
-        }
-
-        fn map_ranges(start_range: &Range, maps: &Vec<RangeMap>) -> Vec<Range> {
-            let mut ret: Vec<Range> = Vec::new();
-            let mut current_range = *start_range;
-            for rm in maps {
-                if current_range.overlaps(&rm.src_range()) || current_range.spans(&rm.src_range()) {
-                    let (res_mapped, res_unmapped) = current_range.map_range(rm);
-                    if res_mapped.width != 0 {
-                        ret.push(res_mapped)
+                let mut lowest = u64::MAX;
+                for seed_range in res_seeds.chunks(2) {
+                    let mut ranges = vec![Range::new(seed_range[0], seed_range[1])];
+                    for rm in &res_maps {
+                        ranges = Range::map_multi_ranges(&ranges, &rm);
                     }
-                    current_range = res_unmapped;
+                    for r in ranges {
+                        if r.start < lowest {
+                            lowest = r.start
+                        }
+                    }
                 }
+                assert_eq!(lowest, tt.1);
             }
-            if current_range.width > 0 {
-                ret.push(current_range);
-            }
-            ret
-        }
-    }
-
-    impl From<(u64,u64)> for Range {
-        fn from(value: (u64, u64)) -> Self {
-            Range{start: value.0, width: value.1}
-        }
-    }
-
-    #[derive(PartialEq, Debug)]
-    struct RangeMap {
-        src: u64,
-        dest: u64,
-        width: u64
-    }
-
-    impl RangeMap {
-        fn src_range(&self) -> Range {
-            Range{start: self.src, width: self.width}
-        }
-        fn dest_range(&self) -> Range {
-            Range{start: self.dest, width: self.width}
-        }
-    }
-
-    impl From<(u64,u64,u64)> for RangeMap {
-        fn from(value: (u64,u64,u64)) -> Self {
-            RangeMap{src: value.0, dest: value.1, width: value.2}
         }
     }
 
