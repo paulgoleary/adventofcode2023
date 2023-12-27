@@ -135,9 +135,6 @@ pub fn do_day2() {
         for line in lines {
             if let Ok(token) = line {
                 let ret = process_line_day2_part2(&token);
-                if ret.power() == 0 {
-                    println!()
-                }
                 sum += ret.power()
             }
         }

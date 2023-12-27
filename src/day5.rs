@@ -189,7 +189,7 @@ impl RangeMap {
         Range{start: self.dest, width: self.width}
     }
 
-    // ixnput is "dest source width"; returns (source, dest, width)
+    // input is "dest source width"; returns (source, dest, width)
 // TODO: error handling?
     fn from_map_line(line: String) -> RangeMap {
         let (_, p) = separated_list1(multispace1, number::<u64>)(line.as_str()).unwrap_or_default();
@@ -335,7 +335,11 @@ mod tests {
 
     #[test]
     fn test_part2_example_mapping() {
-        let tests = vec![("./data/day5example.txt", 46u64),("./data/day5input.txt", 219529182u64)];
+        let tests = vec![
+            ("./data/day5example.txt", 46u64),
+            ("./data/day5input.txt", 219529182u64),
+            ("./data/day5input-jhrcook.txt", 1240035u64)
+        ];
         for tt in tests {
             if let Ok(lines) = common::read_lines(tt.0) {
                 let lines_iter = lines.map(|l| l.unwrap()).into_iter();
