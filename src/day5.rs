@@ -2,16 +2,9 @@ use std::cmp::{min, Ordering};
 use std::error::Error;
 use nom::character::complete::multispace1;
 use nom::multi::separated_list1;
-use crate::common::number;
-use thiserror::Error;
+use crate::common::{AoCError, number};
 
-#[derive(Error, Debug)]
-pub enum Day5Error {
-    #[error("input file had unexpected or invalid format")]
-    InputFormatError(&'static str)
-}
-
-fn process_day5_input(lines : impl Iterator<Item = String>) -> Result<(Vec<u64>, Vec<Vec<RangeMap>>), Day5Error> {
+fn process_day5_input(lines : impl Iterator<Item = String>) -> Result<(Vec<u64>, Vec<Vec<RangeMap>>), AoCError> {
     let line_groups = lines.fold(vec![Vec::new()], |mut acc: Vec<Vec<String>>, line| {
         if line.is_empty() {
             let empty_vec: Vec<String> = Vec::new();
@@ -23,7 +16,7 @@ fn process_day5_input(lines : impl Iterator<Item = String>) -> Result<(Vec<u64>,
         acc
     });
     if line_groups.is_empty() {
-        return Err(Day5Error::InputFormatError("found no input a/o format was invalid"));
+        return Err(AoCError::InputFormatError("found no input a/o format was invalid"));
     }
 
     // first group is special - seeds
@@ -31,18 +24,18 @@ fn process_day5_input(lines : impl Iterator<Item = String>) -> Result<(Vec<u64>,
         Some(sl) => {
             match sl.strip_prefix("seeds: ") {
                 Some(seeds) => separated_list1(multispace1, number::<u64>)(seeds).unwrap_or_default().1,
-                None => return Err(Day5Error::InputFormatError("expected 'seeds: ' prefix"))
+                None => return Err(AoCError::InputFormatError("expected 'seeds: ' prefix"))
             }
         }
-        None => return Err(Day5Error::InputFormatError("empty initial line"))
+        None => return Err(AoCError::InputFormatError("empty initial line"))
     };
     if res_seeds.is_empty() {
-        return Err(Day5Error::InputFormatError("found no seeds or seeds list parsed incorrectly"))
+        return Err(AoCError::InputFormatError("found no seeds or seeds list parsed incorrectly"))
     }
 
     for mg in &line_groups[1..] {
         if mg.is_empty() || mg[0].find("map:").is_none() {
-            return Err(Day5Error::InputFormatError("invalid map group - no header found"))
+            return Err(AoCError::InputFormatError("invalid map group - no header found"))
         }
     }
 
@@ -52,7 +45,7 @@ fn process_day5_input(lines : impl Iterator<Item = String>) -> Result<(Vec<u64>,
 
     Ok((res_seeds, maps))
 }
-fn map_day5_part1_input(lines : impl Iterator<Item = String>) -> Result<Vec<u64>, Day5Error> {
+fn map_day5_part1_input(lines : impl Iterator<Item = String>) -> Result<Vec<u64>, AoCError> {
     let (res_seeds, maps) = process_day5_input(lines)?;
     let ret: Vec<u64> = res_seeds.iter().map(|s| map_with_groups(*s, &maps)).collect();
     Ok(ret)
@@ -213,7 +206,6 @@ impl From<(u64,u64,u64)> for RangeMap {
 
 #[cfg(test)]
 mod tests {
-    use std::cmp::{max, min};
     use nom::character::complete::multispace1;
     use nom::multi::separated_list1;
     use crate::common;
