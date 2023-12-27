@@ -2,25 +2,12 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::str::FromStr;
 use crate::common::AoCError;
-use crate::day7::HandType::{FiveOfAKind, FourOfAKind, FullHouse, HighCard, OnePair, ThreeOfAKind, TwoPair};
+use crate::day7::HandType::*;
 use crate::day7::Kind::*;
 
 #[derive(Clone,Copy,Debug,Eq,Hash,Ord,PartialEq,PartialOrd)]
 enum Kind {
-    SX,
-    S2,
-    S3,
-    S4,
-    S5,
-    S6,
-    S7,
-    S8,
-    S9,
-    ST,
-    SJ,
-    SQ,
-    SK,
-    SA
+    SX, S2, S3, S4, S5, S6, S7, S8, S9, ST, SJ, SQ, SK, SA
 }
 
 impl Kind {
