@@ -2,6 +2,7 @@
 
 #[cfg(test)]
 mod tests {
+    use core::num;
     use std::collections::HashMap;
     use std::iter::Take;
     use std::str::FromStr;
@@ -10,8 +11,10 @@ mod tests {
     use nom::error::Error;
     use nom::IResult;
     use nom::sequence::tuple;
+    use num_bigint::ToBigUint;
+    use num_integer::Integer;
     use crate::common;
-    use crate::common::AoCError;
+    use crate::common::{AoCError, number};
 
     fn node_parser(input: &str) -> IResult<&str, (&str, &str, &str)> {
         match tuple((
@@ -99,40 +102,43 @@ mod tests {
     }
 
     struct NodeStream<'a> {
-        m: &'a HashMap<&'a [u8;3], &'a Node>,
-        k: [u8;3],
+        m: &'a HashMap<[u8;3], &'a Node>,
+        next_keys: Vec<[u8;3]>,
         ix_bytes: Vec<u8>,
         idx: usize
     }
 
     impl NodeStream<'_> {
-        fn new<'a>(node_map: &'a HashMap<&'a [u8;3], &'a Node>, start_key: [u8;3], ix_str: String) -> NodeStream<'a> {
-            NodeStream{m: node_map, k: start_key, ix_bytes: ix_str.bytes().collect(), idx: 0}
+        fn new<'a>(node_map: &'a HashMap<[u8;3], &'a Node>, start_keys: Vec<[u8;3]>, ix_str: String) -> NodeStream<'a> {
+            NodeStream{m: node_map, next_keys: start_keys, ix_bytes: ix_str.bytes().collect(), idx: 0}
         }
     }
     impl<'a> Iterator for NodeStream<'a> {
-        type Item = [u8;3];
+        type Item = Vec<[u8;3]>;
 
         fn next(&mut self) -> Option<Self::Item> {
-            if self.k == [0, 0, 0] {
+            if self.next_keys.contains(&[0, 0, 0]) {
                 return None
             }
-            let next_key = match self.m.get(&self.k) {
-                Some(n) => {
-                    match self.ix_bytes[self.idx] {
-                        b'L' => Some(self.m[&self.k].left),
-                        b'R' => Some(self.m[&self.k].right),
-                        _ => panic!("should not happen")
+
+            let next_keys = self.next_keys.iter().map(|k| {
+                match self.m.get(k) {
+                    Some(n) => {
+                        match self.ix_bytes[self.idx] {
+                            b'L' => Some(n.left),
+                            b'R' => Some(n.right),
+                            _ => panic!("should not happen")
+                        }
                     }
-                },
-                None => None
-            };
+                    None => None
+            }}).collect::<Vec<_>>();
+
             self.idx += 1;
             if self.idx == self.ix_bytes.len() {
                 self.idx = 0;
             }
-            let ret_key = self.k;
-            self.k = next_key.unwrap_or_default();
+            let ret_key = self.next_keys.clone();
+            self.next_keys = next_keys.iter().map(|k| k.unwrap_or_default()).collect();
             Some(ret_key)
         }
     }
@@ -147,11 +153,11 @@ mod tests {
             let ret = process_day8_node_input(lines_iter).unwrap_or_default();
             assert_eq!(ret.len(), 786);
 
-            let ret_map: HashMap<_, _> = ret.iter().map(|n| (&n.key, n)).collect();
+            let ret_map: HashMap<_, _> = ret.iter().map(|n| (n.key, n)).collect();
             assert_eq!(ret_map.len(), 786);
 
-            let ns = NodeStream::new(&ret_map, to_utf3("AAA"), inst.clone());
-            let ns_cnt = ns.take_while(|n| *n != [b'Z', b'Z', b'Z']).count();
+            let ns = NodeStream::new(&ret_map, vec![to_utf3("AAA")], inst.clone());
+            let ns_cnt = ns.take_while(|n| n[0] != [b'Z', b'Z', b'Z']).count();
             assert_eq!(ns_cnt, 19631);
 
             let mut key = to_utf3("AAA");
@@ -171,6 +177,35 @@ mod tests {
                 }
             }
             assert_eq!(cnt, 19631);
+        }
+    }
+
+    #[test]
+    fn test_day8_part2() {
+        if let Ok(lines) = common::read_lines("./data/day8input.txt") {
+            let mut lines_iter = lines.map(|l| l.unwrap()).into_iter();
+            let inst = lines_iter.next().unwrap();
+            lines_iter.next();
+
+            let ret = process_day8_node_input(lines_iter).unwrap_or_default();
+            assert_eq!(ret.len(), 786);
+
+            let ret_map: HashMap<_, _> = ret.iter().map(|n| (n.key, n)).collect();
+            assert_eq!(ret_map.len(), 786);
+
+            let part2_start_keys: Vec<[u8; 3]> = ret_map.keys().filter(|k| k[2] == b'A').map(|k| *k).collect();
+
+            let key_counts: Vec<_> = part2_start_keys.iter().map(|k| {
+                let ns = NodeStream::new(&ret_map, vec![*k], inst.clone());
+                ns.take_while(|n| {
+                    !n.iter().all(|k| k[2] == b'Z')
+                }).count()
+            }).collect();
+
+            let keys_lcm = key_counts.iter().fold(1.to_biguint().unwrap(), |acc, kc| {
+                acc.lcm(&kc.to_biguint().unwrap())
+            });
+            assert_eq!(keys_lcm, 21003205388413u64.to_biguint().unwrap())
         }
     }
 }
