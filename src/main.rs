@@ -7,6 +7,7 @@ mod day4;
 mod day5;
 mod day6;
 mod day7;
+mod day8;
 
 use crate::day3::do_day3;
 use crate::day4::do_day4;
